@@ -1,0 +1,19 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v4.3.8
+_src_path: https://github.com/jupyterlab/extension-template
+author_email: tranduylong0306@gmail.com
+author_name: LongTran, Reza Oveisi
+data_format: string
+file_extension: ''
+has_binder: false
+has_settings: false
+kind: frontend
+labextension_name: jlx_nemo
+mimetype: ''
+mimetype_name: ''
+project_short_description: Jupyter Lab extension with Nemo Datalog Reasoner
+python_name: jlx_nemo
+repository: https://github.com/DanCat6300/nemo-jupyterlab
+test: false
+viewer_name: ''
+
