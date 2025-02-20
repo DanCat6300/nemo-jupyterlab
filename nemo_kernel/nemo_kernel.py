@@ -42,17 +42,24 @@ class NemoKernel(MetaKernel):
         Returns:
             Func: Call the default do_execute.
         """
-        # Record rules into global_state
-        print("cell_id:", cell_id)
-        self.global_state[cell_id] = code
-        print("global_state:", self.global_state)
+        # Separate @output statements from the rules 
+        output_statements = get_output_statement(code)
+        rules_without_output = filter_output_from_rules(code)
+
+        # Record rules into global_state without @output
+        self.global_state[cell_id] = rules_without_output
+
+        # Stop when there is no @output
+        if not output_statements: return
 
         # Compile rules from global_state into a string
         rules_to_reason = ""
         for cell_id in self.global_state:
             rules_to_reason += (str(self.global_state[cell_id]) + '\n')
         
-        print(rules_to_reason)
+        # Re-inject @output statements
+        for item in output_statements:
+            rules_to_reason += f'@output {item}.'
 
         return super().do_execute(rules_to_reason, silent, store_history, user_expressions, allow_stdin)
 
@@ -92,6 +99,12 @@ class NemoKernel(MetaKernel):
 
     def repr(self, data):
         return repr(data)
+    
+
+# def filter_output_statement(rules):
+#     for line in rules: 
+#         if "@output" in line:
+
 
 
 def get_output_statement(rules):
@@ -104,6 +117,21 @@ def get_output_statement(rules):
     """ 
     output_statements = re.findall(OUTPUT_REGEX, rules)
     return output_statements
+
+
+def filter_output_from_rules(code):
+    """
+    Filter @output statement from the rules
+    Args:
+        code (str): Rules received from server.
+    Returns:
+        Str: Rules without @output statements.
+    """
+    rules_without_output = []
+    for oneRule in code.split('.'):
+        if '@output' not in oneRule:
+            rules_without_output.append(oneRule)
+    return('.'.join(rules_without_output))
 
 
 def get_results(output_statements, nemo_engine):
