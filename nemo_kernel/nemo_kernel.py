@@ -25,7 +25,8 @@ class NemoKernel(MetaKernel):
 
     def __init__(self, **kwargs):
         self.global_state = {}
-        self.output_statements = []
+        self.output_predicates = []
+        self.current_cell_id = ''
         super(NemoKernel, self).__init__(**kwargs)
 
 
@@ -42,22 +43,25 @@ class NemoKernel(MetaKernel):
         Returns:
             Func: Call the default do_execute.
         """
-        # Separate @output statements from the rules 
-        self.output_statements = re.findall(OUTPUT_REGEX, code)
+        self.current_cell_id = cell_id
 
-        # Filter @output from rules before recording to global_state
-        if self.output_statements:
-            code = filter_output_statements(code)
+        # Extract output predicates from the rules 
+        self.output_predicates = re.findall(OUTPUT_REGEX, code)
+
+        # Filter @output statements from rules before recording to global_state if any
+        rules_to_save = code
+        if self.output_predicates:
+            rules_to_save = filter_output_statements(code)
 
         # Record rules into global_state without @output
-        self.global_state[cell_id] = code
+        self.global_state[cell_id] = rules_to_save
 
-        # Compile all active rules from global_state into a string
-        compiled_rules = ""
-        for cell_id in self.global_state:
-            compiled_rules += (str(self.global_state[cell_id]) + '\n')
+        # Compile all active rules from global_state with the current cell into a string
+        for key in self.global_state:
+            if cell_id != key:
+                code += (str(self.global_state[key]) + '\n')
 
-        return super().do_execute(compiled_rules, silent, store_history, user_expressions, allow_stdin)
+        return super().do_execute(code, silent, store_history, user_expressions, allow_stdin)
 
 
     def do_execute_direct(self, rules):
@@ -68,17 +72,18 @@ class NemoKernel(MetaKernel):
         Returns:
             Obj: The results returned by Nemo Engine or error.
         """
-        # Return if no @output statement in the current cell
-        if not self.output_statements: return
-
         try:
             # Create a nemo engine and reason on rules
             engine = NemoEngine(load_string(rules))
             engine.reason()
 
+            # If no output statements, return without displaying results
+            if not self.output_predicates: return
+
             # Get results and convert it to dataframes
-            results = get_results(self.output_statements, engine)
+            results = get_results(self.output_predicates, engine)
             dfs = convert_to_df(results)
+
 
             # Inject html to visualise dataframes on frontend
             output = "".join(
@@ -86,27 +91,17 @@ class NemoKernel(MetaKernel):
                 for key, df in dfs.items()
             )
 
-            self.output_statements = []
+            self.output_predicates = []
             return HTML(output)
 
         except Exception as error:
+            # Remove error cell from global_state 
+            self.global_state.pop(self.current_cell_id)
             return f"Error: {str(error)}"
 
 
     def repr(self, data):
         return repr(data)
-
-
-def get_output_statement(rules):
-    """
-    Extract output predicate recognised by '@output'.
-    Args:
-        rules (str): Rules received from server.
-    Returns:
-        List: List of extracted predicates.
-    """ 
-    output_statements = re.findall(OUTPUT_REGEX, rules)
-    return output_statements
 
 
 def filter_output_statements(rules):
