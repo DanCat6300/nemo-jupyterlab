@@ -1,14 +1,13 @@
 from metakernel import MetaKernel
 from nmo_python import load_string, NemoEngine
-from IPython.display import display, HTML
+from IPython.display import HTML
 import re
 import pandas as pd
-# from ipykernel.kernelbase import Kernel
 
 
 __version__ = "0.1"
 BRACKET_REGEX = r'^<[^>]*>$'
-OUTPUT_REGEX = r"@output\s+(\w+)"
+OUTPUT_REGEX = r"(?<![\s%])\s*@output\s+(\S+)\s*\."
 
 
 class NemoKernel(MetaKernel):
@@ -26,12 +25,13 @@ class NemoKernel(MetaKernel):
 
     def __init__(self, **kwargs):
         self.global_state = {}
+        self.output_statements = []
         super(NemoKernel, self).__init__(**kwargs)
 
 
     def get_usage(self):
         return "Reason your rules."
-    
+
 
     def do_execute(self, code, cell_id, silent=False, store_history=True, user_expressions=None, allow_stdin=False):
         """
@@ -43,25 +43,21 @@ class NemoKernel(MetaKernel):
             Func: Call the default do_execute.
         """
         # Separate @output statements from the rules 
-        output_statements = get_output_statement(code)
-        rules_without_output = filter_output_from_rules(code)
+        self.output_statements = re.findall(OUTPUT_REGEX, code)
+
+        # Filter @output from rules before recording to global_state
+        if self.output_statements:
+            code = filter_output_statements(code)
 
         # Record rules into global_state without @output
-        self.global_state[cell_id] = rules_without_output
+        self.global_state[cell_id] = code
 
-        # Stop when there is no @output
-        if not output_statements: return
-
-        # Compile rules from global_state into a string
-        rules_to_reason = ""
+        # Compile all active rules from global_state into a string
+        compiled_rules = ""
         for cell_id in self.global_state:
-            rules_to_reason += (str(self.global_state[cell_id]) + '\n')
-        
-        # Re-inject @output statements
-        for item in output_statements:
-            rules_to_reason += f'@output {item}.'
+            compiled_rules += (str(self.global_state[cell_id]) + '\n')
 
-        return super().do_execute(rules_to_reason, silent, store_history, user_expressions, allow_stdin)
+        return super().do_execute(compiled_rules, silent, store_history, user_expressions, allow_stdin)
 
 
     def do_execute_direct(self, rules):
@@ -72,17 +68,16 @@ class NemoKernel(MetaKernel):
         Returns:
             Obj: The results returned by Nemo Engine or error.
         """
-        # Return if no @Output statement in the current cell
-        output_statements = get_output_statement(rules)
-        if not output_statements: return
-        
+        # Return if no @output statement in the current cell
+        if not self.output_statements: return
+
         try:
             # Create a nemo engine and reason on rules
             engine = NemoEngine(load_string(rules))
             engine.reason()
 
             # Get results and convert it to dataframes
-            results = get_results(output_statements, engine)
+            results = get_results(self.output_statements, engine)
             dfs = convert_to_df(results)
 
             # Inject html to visualise dataframes on frontend
@@ -91,6 +86,7 @@ class NemoKernel(MetaKernel):
                 for key, df in dfs.items()
             )
 
+            self.output_statements = []
             return HTML(output)
 
         except Exception as error:
@@ -99,12 +95,6 @@ class NemoKernel(MetaKernel):
 
     def repr(self, data):
         return repr(data)
-    
-
-# def filter_output_statement(rules):
-#     for line in rules: 
-#         if "@output" in line:
-
 
 
 def get_output_statement(rules):
@@ -119,19 +109,21 @@ def get_output_statement(rules):
     return output_statements
 
 
-def filter_output_from_rules(code):
+def filter_output_statements(rules):
     """
     Filter @output statement from the rules
     Args:
-        code (str): Rules received from server.
+        rules (str): Rules received from server.
     Returns:
         Str: Rules without @output statements.
     """
-    rules_without_output = []
-    for oneRule in code.split('.'):
-        if '@output' not in oneRule:
-            rules_without_output.append(oneRule)
-    return('.'.join(rules_without_output))
+    filtered_rules = []
+
+    for rule in rules.split('.'):
+        if '@output' not in rule:
+            filtered_rules.append(rule)
+
+    return('.'.join(filtered_rules))
 
 
 def get_results(output_statements, nemo_engine):
@@ -187,18 +179,6 @@ def convert_to_df(results):
 
     return dfs
 
-
-# Expose kernel methods to backend server
-# kernel = NemoKernel()
-
-# def execute_kernel_reasoning(rules):
-#     return kernel.do_execute_direct(rules)
-
-# def get_kernel_usage():
-#     return kernel.get_usage()
-
-# def terminate_kernel():
-#     kernel.do_shutdown()
 
 if __name__ == '__main__':
     NemoKernel.run_as_main()
