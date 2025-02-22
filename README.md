@@ -5,14 +5,14 @@ This repository serves as code storage for the team project.
 The project is to develop a kernel with Nemo Datalog Reasoner as an interpreter.
 This may also involves extending UI components of the frontend, Jupyter Lab.
 
-See jlx_nemo for more information regarding frontend part.
-See kernel.py in the nemo_kernel folder.
+See jlx_nemo for frontend extension.
+See kernel development in the nemo_kernel folder.
 
 ## Project setup
 
 To avoid dependency conflict, a virtual environment should be set up.
 
-1. Install Anaconda, we will use conda for terminal commands.
+1. Install *Anaconda* to use `conda` for terminal commands.
 2. Create a conda environment and **activate the environment**.
 
     ```shell
@@ -32,27 +32,24 @@ The project consists of 2 parts: kernel (backend development) and jupyterlab ext
 
 ### Set up jupyter lab extension template
 
-The setup process is described thoroughly in Jupyter's documentation:
+The setup process is described  in Jupyter's documentation:
 <https://jupyterlab.readthedocs.io/en/stable/extension/extension_dev.html#developer-extensions>
-There is also a tutorial:
+
+There is also a tutorial by Jupyter:
 <https://jupyterlab.readthedocs.io/en/stable/extension/extension_tutorial.html>
 
 Below are the steps specifically for this project:
 
-1. Download the extension template into a new folder
+**Note**: Activate conda environment if not done so.
 
-    ```shell
-    copier copy https://github.com/jupyterlab/extension-template [folder_name]
-    ```
-
-2. Direct to the template's folder to install dependencies and build the extension
+1. Direct to the extension's folder to install dependencies and build the extension
 
     ```shell
     jlpm install
     jlpm run build
     ```
 
-3. Install the extension to be used in Jupyter Lab
+2. Install the extension to be used in Jupyter Lab
 
     ```shell
     jupyter labextension develop --overwrite
@@ -64,7 +61,7 @@ Below are the steps specifically for this project:
     jupyter labextension list
     ```
 
-4. Open another terminal and test run
+3. Open another terminal and test run
 
     ```shell
     conda activate [env_name]
@@ -73,9 +70,9 @@ Below are the steps specifically for this project:
 
     When check the console on your browser devtool, you should see a message that the extension has been activated.
 
-5. Start extending Jupyter Lab :)
+4. Start extending Jupyter Lab :)
 
-    When make changes to the code, you only need to run `jlpm run build` and refresh the browser.
+    When making changes to the code, you only need to run `jlpm run build` and refresh the browser.
 
 ### Set up and install the kernel
 
