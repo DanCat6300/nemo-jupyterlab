@@ -1,13 +1,15 @@
 from metakernel import MetaKernel
-from nmo_python import load_string, NemoEngine
+from nmo_python import load_string, NemoEngine, NemoOutputManager
 from IPython.display import HTML
 import re
 import pandas as pd
+import os
 
 
 __version__ = "0.1"
 BRACKET_REGEX = r'^<[^>]*>$'
 OUTPUT_REGEX = r"(?<![\s%])\s*@output\s+(\S+)\s*\."
+EXPORT_REGEX = r"@export\s+(\w+)\s*:- "
 
 
 class NemoKernel(MetaKernel):
@@ -26,6 +28,7 @@ class NemoKernel(MetaKernel):
     def __init__(self, **kwargs):
         self.global_state = {}
         self.output_predicates = []
+        self.export_predicates = []
         self.current_cell_id = ''
         super(NemoKernel, self).__init__(**kwargs)
 
@@ -47,13 +50,14 @@ class NemoKernel(MetaKernel):
 
         # Extract output predicates from the rules 
         self.output_predicates = re.findall(OUTPUT_REGEX, code)
+        self.export_predicates = re.findall(EXPORT_REGEX, code)
 
         # Filter @output statements from rules before recording to global_state if any
         rules_to_save = code
-        if self.output_predicates:
-            rules_to_save = filter_output_statements(code)
+        if self.output_predicates or self.export_predicates:
+            rules_to_save = filter_statements(code)
 
-        # Record rules into global_state without @output
+        # Record rules into global_state without @output and @export
         self.global_state[cell_id] = rules_to_save
 
         # Compile all active rules from global_state with the current cell into a string
@@ -77,13 +81,16 @@ class NemoKernel(MetaKernel):
             engine = NemoEngine(load_string(rules))
             engine.reason()
 
+            #Export @export predicates when it is needed
+            if self.export_predicates:
+                export_results(engine,rules)
+
             # If no output statements, return without displaying results
             if not self.output_predicates: return
 
             # Get results and convert it to dataframes
             results = get_results(self.output_predicates, engine)
             dfs = convert_to_df(results)
-
 
             # Inject html to visualise dataframes on frontend
             output = "".join(
@@ -92,6 +99,8 @@ class NemoKernel(MetaKernel):
             )
 
             self.output_predicates = []
+            self.export_predicates = []
+
             return HTML(output)
 
         except Exception as error:
@@ -104,19 +113,19 @@ class NemoKernel(MetaKernel):
         return repr(data)
 
 
-def filter_output_statements(rules):
+def filter_statements(rules):
     """
-    Filter @output statement from the rules
+    Filter @output & @export statements from the rules
     Args:
         rules (str): Rules received from server.
     Returns:
-        Str: Rules without @output statements.
+        Str: Rules without @output and @export statements.
     """
     filtered_rules = []
 
     for rule in rules.split('.'):
-        if '@output' not in rule:
-            filtered_rules.append(rule)
+        if ('@output' not in rule) and ('@export' not in rule):
+                filtered_rules.append(rule)
 
     return('.'.join(filtered_rules))
 
@@ -173,6 +182,22 @@ def convert_to_df(results):
         dfs[key] = df
 
     return dfs
+
+
+def export_results(engine,rules):
+    """
+    Export all csv files in the results folder
+    Args:
+        engine (NemoEngine): The instantiated nemo object. 
+        rules (str): Rules received from server.
+    """
+    exports = re.findall(EXPORT_REGEX, rules)
+    for export in exports:
+        output_manager = NemoOutputManager('./results', gzip=False)
+        file_path = f"./results/{export}.csv"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        engine.write_result(export, output_manager)
 
 
 if __name__ == '__main__':
