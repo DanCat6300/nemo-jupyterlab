@@ -4,12 +4,13 @@ from IPython.display import HTML
 import re
 import pandas as pd
 import os
-
+import matplotlib.pyplot as plt
 
 __version__ = "0.1"
 BRACKET_REGEX = r'^<[^>]*>$'
 OUTPUT_REGEX = r"(?<![\s%])\s*@output\s+(\S+)\s*\."
 EXPORT_REGEX = r"@export\s+(\w+)\s*:- "
+PLOT_REGEX = r"(?<![\s%])\s*@plot\s+(\S+)\s*\."
 
 
 class NemoKernel(MetaKernel):
@@ -29,6 +30,7 @@ class NemoKernel(MetaKernel):
         self.global_state = {}
         self.output_predicates = []
         self.export_predicates = []
+        self.plot_predicates = []
         self.current_cell_id = ''
         super(NemoKernel, self).__init__(**kwargs)
 
@@ -51,13 +53,14 @@ class NemoKernel(MetaKernel):
         # Extract output predicates from the rules 
         self.output_predicates = re.findall(OUTPUT_REGEX, code)
         self.export_predicates = re.findall(EXPORT_REGEX, code)
+        self.plot_predicates = re.findall(PLOT_REGEX, code)
 
-        # Filter @output statements from rules before recording to global_state if any
+        # Filter @output, @export and @plot statements from rules before recording to global_state if any
         rules_to_save = code
-        if self.output_predicates or self.export_predicates:
+        if self.output_predicates or self.export_predicates or self.plot_predicates:
             rules_to_save = filter_statements(code)
 
-        # Record rules into global_state without @output and @export
+        # Record rules into global_state without @output, @export and @plot
         self.global_state[cell_id] = rules_to_save
 
         # Compile all active rules from global_state with the current cell into a string
@@ -78,28 +81,40 @@ class NemoKernel(MetaKernel):
         """
         try:
             # Create a nemo engine and reason on rules
-            engine = NemoEngine(load_string(rules))
+            modified_rules = re.sub(r'@plot', '@output', rules)
+            engine = NemoEngine(load_string(modified_rules))
             engine.reason()
 
             #Export @export predicates when it is needed
             if self.export_predicates:
                 export_results(engine,rules)
 
+            # If plot statement exists, Plot the results:
+            if self.plot_predicates:
+                plot_results(self, engine) 
+
+            output = ""
             # If no output statements, return without displaying results
-            if not self.output_predicates: return
+            if self.output_predicates: 
+                # Get results and convert it to dataframes
+                results = get_results(self.output_predicates, engine)
+                dfs = convert_to_df(results)
 
-            # Get results and convert it to dataframes
-            results = get_results(self.output_predicates, engine)
-            dfs = convert_to_df(results)
+                # Inject html to visualise dataframes on frontend
+                output = "".join(
+                    f"<details><summary><b>{key}</b></summary>{df.to_html(notebook=True)}</details><br>" 
+                    for key, df in dfs.items()
+                )
 
-            # Inject html to visualise dataframes on frontend
-            output = "".join(
-                f"<details><summary><b>{key}</b></summary>{df.to_html(notebook=True)}</details><br>" 
-                for key, df in dfs.items()
-            )
+            if self.plot_predicates:
+                output += f'<img src="{self.current_cell_id}.png"/>'
 
             self.output_predicates = []
             self.export_predicates = []
+            self.plot_predicates = []
+
+            # If there is no output, return without displaying any results
+            if not output: return 
 
             return HTML(output)
 
@@ -115,16 +130,16 @@ class NemoKernel(MetaKernel):
 
 def filter_statements(rules):
     """
-    Filter @output & @export statements from the rules
+    Filter @output, @export and @plot statements from the rules
     Args:
         rules (str): Rules received from server.
     Returns:
-        Str: Rules without @output and @export statements.
+        Str: Rules without @output, @export and @plot statements.
     """
     filtered_rules = []
 
     for rule in rules.split('.'):
-        if ('@output' not in rule) and ('@export' not in rule):
+        if ('@output' not in rule) and ('@export' not in rule) and ('@plot' not in rule):
                 filtered_rules.append(rule)
 
     return('.'.join(filtered_rules))
@@ -199,6 +214,23 @@ def export_results(engine,rules):
             os.remove(file_path)
         engine.write_result(export, output_manager)
 
+
+def plot_results(self,engine):
+    """
+    Plot the element in the cell
+    Args:
+        engine (NemoEngine): The instantiated nemo object. 
+        self
+    """
+    # Get plot results and convert it to dataframes
+    results = get_results(self.plot_predicates, engine)
+    dfs = convert_to_df(results)
+
+    for key, df in dfs.items():
+        plt.plot(df['Node 1'], df['Node 2'], marker='o', label=str(key))
+        plt.legend()  # Show legend
+        plt.savefig(self.current_cell_id)
+    plt.close()
 
 if __name__ == '__main__':
     NemoKernel.run_as_main()
