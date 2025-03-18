@@ -1,0 +1,18 @@
+{
+  "ServerApp": {
+    "jpserver_extensions": {
+      "jupyter_lsp": true
+    }
+  },
+  "LanguageServerManager": {
+    "language_servers": {
+      "nemo": {
+        "argv": ["absolute/path/to/language_server.exe", "--stdio"],
+        "languages": ["nemo"],
+        "version": 2,
+        "display_name": "Nemo language server",
+        "mime_types": ["text/x-nemo"]
+      }
+    }
+  }
+}

@@ -96,6 +96,10 @@ Below are the steps specifically for this project:
 5. Access the location where the `kernel.json` is newly created and replace `ipython_launcher` with `nemo_kernel` in the file. The file location can be seen on the terminal after running the previous command.
 6. **At the location of `nemo_kernel.py`**, start Jupyter Lab and test run.
 
+## Language Server
+
+Please see `README.md` in `jl_config` and `language_server_changes`.
+
 &nbsp;
 
 This concludes the long project set up :)

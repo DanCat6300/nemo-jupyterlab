@@ -16,14 +16,12 @@ PLOT_REGEX = r"(?<![\s%])\s*@plot\s+(\S+)\s*\."
 class NemoKernel(MetaKernel):
     implementation = 'Nemo Kernel'
     implementation_version = '0.1'
-    language = 'text'
-    language_version = '0.1'
+    language = 'nemo'
     banner = " Nemo: Your Friendly and Versatile Rule Reasoning Toolkit"
     language_info = {
-        'mimetype': 'text/plain',
-        'name': 'text',
-        'file_extension': '.txt',
-        'help_links': MetaKernel.help_links,
+        'mimetype': 'text/x-nemo',
+        'name': 'nemo',
+        "version": '1'
     }
 
     def __init__(self, **kwargs):
