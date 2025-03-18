@@ -24,6 +24,6 @@ Jupyter Lab LSP documentation: [here](https://jupyterlab-lsp.readthedocs.io/en/l
     jupyter --path
     ```
 
-3. Edit your config following the this json file or just copy it at your own risk. **Change the absolute path according to your local**
+3. Edit your config following the this json file or just copy-paste (risky). **Change the absolute path according to your local**
 
 4. Also modify your `kernel.json` file. See the file in the nemo_kernel folder.
