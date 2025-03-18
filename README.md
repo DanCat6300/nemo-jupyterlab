@@ -98,7 +98,9 @@ Below are the steps specifically for this project:
 
 ## Language Server
 
-Please see `README.md` in `jl_config` and `language_server_changes`.
+For now this feature enable basic syntax highlighting. More features may come.
+
+For installation/configuration instruction, please see `README.md` in `jl_config` and `language_server_changes`.
 
 &nbsp;
 
