@@ -8,6 +8,6 @@ The nemo language server is included the nemo repository [here](https://github.c
 
 This version include a temporary function `document_highlight` to return semantic tokens embedded in the result template.
 
-Add the additional function in this version to the one in your local nemo's language server folder, or simply copy and replace at your own risk.
+Add the additional function in this version to the one in your local nemo's language server folder, or simply copy and replace.
 
 **Rebuild** the the language server after the modification.
