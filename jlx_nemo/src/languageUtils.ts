@@ -114,7 +114,7 @@ function mapTokensToEditorViews(tokens: any[], editorViews: any[]) {
 /**
  * Retrieve all editors, each cell has an editor
  */
-export function getEditors(virtualDocument: VirtualDocument) {
+export function getEditors(virtualDocument: VirtualDocument): any {
   let lastEditor = virtualDocument.getEditorAtVirtualLine({ line: 0, ch: 0, isVirtual: true }).getEditor();
   let editorsArr = [lastEditor];
 

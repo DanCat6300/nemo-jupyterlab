@@ -1,3 +1,4 @@
+import ast
 from metakernel import MetaKernel
 from nmo_python import load_string, NemoEngine, NemoOutputManager
 from IPython.display import HTML
@@ -46,6 +47,11 @@ class NemoKernel(MetaKernel):
         Returns:
             Func: Call the default do_execute.
         """
+        # On cell removal event, update global state and return
+        if 'cell_removal_event' in code:
+            self.global_state = handle_cell_removal(self.global_state, code)
+            return
+
         self.current_cell_id = cell_id
 
         # Extract output predicates from the rules 
@@ -213,12 +219,12 @@ def export_results(engine,rules):
         engine.write_result(export, output_manager)
 
 
-def plot_results(self,engine):
+def plot_results(self, engine):
     """
-    Plot the element in the cell
+    Plot the element in the cell.
     Args:
         engine (NemoEngine): The instantiated nemo object. 
-        self
+        self (Self@NemoKernel): global variable of class NemoKernel.
     """
     # Get plot results and convert it to dataframes
     results = get_results(self.plot_predicates, engine)
@@ -229,6 +235,21 @@ def plot_results(self,engine):
         plt.legend()  # Show legend
         plt.savefig(self.current_cell_id)
     plt.close()
+
+
+def handle_cell_removal(global_state, code):
+    """
+    Update the global state when the client remove the cell.
+    Args:
+        global_state (Dict): The current global state containing active cells.
+        code (String): Cell removal request containing the list of currently active cells of removal. 
+    Returns:
+        dict: The global state containing only the existing cells on the frontend.
+    """
+    current_cells = ast.literal_eval(code.split(',', 1)[1]) # Extract list of active cells from the request
+    filtered_global_state = {key: value for key, value in global_state.items() if key in current_cells}
+    return filtered_global_state
+
 
 if __name__ == '__main__':
     NemoKernel.run_as_main()

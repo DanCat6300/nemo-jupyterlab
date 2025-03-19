@@ -7,6 +7,8 @@ import {
   IDocumentConnectionData, 
 } from '@jupyterlab/lsp';
 import { applySemanticTokens, getEditors } from './languageUtils';
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
+import { Cell } from '@jupyterlab/cells';
 
 /**
  * Initialization data for the jlx_nemo extension.
@@ -15,9 +17,21 @@ const plugin: JupyterFrontEndPlugin<void> = {
   id: 'jlx_nemo:plugin',
   description: 'Jupyter Lab extension with Nemo Datalog Reasoner',
   autoStart: true,
-  requires: [ILSPDocumentConnectionManager],
-  activate: (app: JupyterFrontEnd, connectionManager: ILSPDocumentConnectionManager) => {
+  requires: [ILSPDocumentConnectionManager, INotebookTracker],
+  activate: (app: JupyterFrontEnd, connectionManager: ILSPDocumentConnectionManager, notebookTracker: INotebookTracker) => {
     console.log('JupyterLab extension jlx_nemo is activated!');
+
+    // Tracking notebook activities
+    notebookTracker.currentChanged.connect((_, panel: NotebookPanel | null) => {
+      if (!panel) return;
+      const notebookModel = panel.model;
+      if (!notebookModel) return;
+
+      // Handle cell removal event
+      notebookModel.cells.changed.connect((_, changes) => {
+        if (changes.type === 'remove') sendCellIdsToKernel(panel);
+      }) 
+    });
 
     // Accessing the connection to the language server to apply manual action
     connectionManager.connected.connect((_, connectionData: IDocumentConnectionData) => {
@@ -41,5 +55,33 @@ const plugin: JupyterFrontEndPlugin<void> = {
     });
   }
 };
+
+/**
+ * Function to send a list of cell ids to the kernel and trigger code execution
+ */
+function sendCellIdsToKernel(panel: NotebookPanel) {
+  const kernel = panel.sessionContext.session?.kernel;
+  const cellIds = panel.content.widgets
+    .filter(widget => widget instanceof Cell)
+    .map(cell => (cell as Cell).model.id);
+
+  kernel?.sendShellMessage({
+    content: {
+      code: `cell_removal_event, ${JSON.stringify(cellIds)}`
+    },
+    header: {
+      msg_id: 'cell_delete_notification',
+      msg_type: 'execute_request',
+      session: kernel.clientId,
+      username: '',
+      date: new Date().toDateString(),
+      version: '5.0'
+    },
+    metadata: {},
+    parent_header: {},
+    buffers: [],
+    channel: 'shell'
+  });
+}
 
 export default plugin;
