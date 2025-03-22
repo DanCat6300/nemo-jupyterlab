@@ -9,6 +9,7 @@
 */.ipynb_checkpoints/*
 *.ipynb
 .virtual_documents
+data_kernelspec
 
 # IPython
 profile_default/

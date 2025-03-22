@@ -249,7 +249,3 @@ def handle_cell_removal(global_state, code):
     current_cells = ast.literal_eval(code.split(',', 1)[1]) # Extract list of active cells from the request
     filtered_global_state = {key: value for key, value in global_state.items() if key in current_cells}
     return filtered_global_state
-
-
-if __name__ == '__main__':
-    NemoKernel.run_as_main()

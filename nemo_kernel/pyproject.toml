@@ -1,0 +1,42 @@
+[build-system]
+requires = [
+    "hatchling", "ipykernel"
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "nemo_kernel"
+dynamic = ["version"]
+description = "Nemo kernel for Jupyter nemo extension"
+readme = "README.md"
+authors = [
+    {name = "Long Tran", email = ""},
+    {name = "Reza Ovisi", email = ""}
+]
+classifiers = [
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Framework :: Jupyter :: JupyterLab",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research"
+]
+requires-python = ">=3.0"
+dependencies = [
+    "metakernel",
+    "jupyter_client",
+    "ipykernel",
+    "pandas",
+    "matplotlib"
+]
+
+[tool.hatch.version]
+path = "nemo_kernel/__init__.py"
+
+[tool.hatch.build.hooks.custom]
+
+[tool.hatch.build.targets.sdist]
+include = ["/nemo_kernel"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"data_kernelspec/share" = "share"

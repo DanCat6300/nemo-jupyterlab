@@ -8,24 +8,6 @@ Jupyter Lab extension with Nemo Datalog Reasoner
 
 - JupyterLab >= 4.0.0
 
-## Install
-
-To install the extension, execute:
-
-```bash
-pip install jlx_nemo
-```
-
-## Uninstall
-
-To remove the extension, execute:
-
-```bash
-pip uninstall jlx_nemo
-```
-
-## Contributing
-
 ### Development install
 
 Note: You will need NodeJS to build the extension package.
@@ -34,32 +16,25 @@ The `jlpm` command is JupyterLab's pinned version of
 [yarn](https://yarnpkg.com/) that is installed with JupyterLab. You may use
 `yarn` or `npm` in lieu of `jlpm` below.
 
+**Note**: Activate conda environment if not done so.
+
 ```bash
 # Clone the repo to your local environment
 # Change directory to the jlx_nemo directory
 # Install package in development mode
-pip install -e "."
+jlpm install
 # Link your development version of the extension with JupyterLab
-jupyter labextension develop . --overwrite
+jupyter labextension develop --overwrite
 # Rebuild extension Typescript source after making changes
-jlpm build
+jlpm run build
 ```
 
-You can watch the source directory and run JupyterLab at the same time in different terminals to watch for changes in the extension's source and automatically rebuild the extension.
+When check the console on your browser devtool, you should see a message that the extension has been activated.
 
-```bash
-# Watch the source directory in one terminal, automatically rebuilding when needed
-jlpm watch
-# Run JupyterLab in another terminal
-jupyter lab
-```
+The extension should appear in a list when run this command
 
-With the watch command running, every saved change will immediately be built locally and available in your running JupyterLab. Refresh JupyterLab to load the change in your browser (you may need to wait several seconds for the extension to be rebuilt).
-
-By default, the `jlpm build` command generates the source maps for this extension to make it easier to debug using the browser dev tools. To also generate source maps for the JupyterLab core extensions, you can run the following command:
-
-```bash
-jupyter lab build --minimize=False
+```shell
+jupyter labextension list
 ```
 
 ### Development uninstall

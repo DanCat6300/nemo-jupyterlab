@@ -2,15 +2,21 @@
 
 This repository serves as code storage for the team project.
 
-The project is to develop a kernel with Nemo Datalog Reasoner as an interpreter.
-This may also involves extending UI components of the frontend, Jupyter Lab.
+This project is to develop a kernel with Nemo Datalog Reasoner as an interpreter.
 
-See jlx_nemo for frontend extension.
-See kernel development in the nemo_kernel folder.
+The project's current components include:
+
+1. `nemo_kernel`: a kernel with Nemo Datalog Reasoner integrated.
+2. *Jupyterlab Extension*: Extend functionalities to accomodate nemo's logic and features.
+3. *Language Server*: Utilise *jupyterlab-LSP* and *nemo-language-server* for syntax highlighting
+
+Each component is stored in their own folder with their setup instruction.
 
 ## Project setup
 
 To avoid dependency conflict, a virtual environment should be set up.
+
+(Replace `[env_name]` with your desire name).
 
 1. Install *Anaconda* to use `conda` for terminal commands.
 2. Create a conda environment and **activate the environment**.
@@ -28,15 +34,11 @@ To avoid dependency conflict, a virtual environment should be set up.
 
 &nbsp;
 
-The project consists of 2 parts: kernel (backend development) and jupyterlab extension (mainly frontend).
+### Set up jupyter lab jlx_nemo extension
 
-### Set up jupyter lab extension template
+The setup process is described in more detail in Jupyter's documentation [here](https://jupyterlab.readthedocs.io/en/stable/extension/extension_dev.html#developer-extensions)
 
-The setup process is described  in Jupyter's documentation:
-<https://jupyterlab.readthedocs.io/en/stable/extension/extension_dev.html#developer-extensions>
-
-There is also a tutorial by Jupyter:
-<https://jupyterlab.readthedocs.io/en/stable/extension/extension_tutorial.html>
+There is also a tutorial by Jupyter [here](https://jupyterlab.readthedocs.io/en/stable/extension/extension_tutorial.html)
 
 Below are the steps specifically for this project:
 
@@ -70,13 +72,11 @@ Below are the steps specifically for this project:
 
     When check the console on your browser devtool, you should see a message that the extension has been activated.
 
-4. Start extending Jupyter Lab :)
+4. Start extending Jupyter Lab
 
     When making changes to the code, you only need to run `jlpm run build` and refresh the browser.
 
 ### Set up and install the kernel
-
-**Note**: It is recommend to do this outside of the Jupyterlab extension folder.
 
 1. Activate conda environment if not done so.
 2. Ensure the followings are installed: `metakernel`, `maturin`, `jupyter`, `jupyterlab`, `ipykernel`. If not, install with `pip` or `conda`.
@@ -87,20 +87,34 @@ Below are the steps specifically for this project:
     2. Run `maturin develop`
     3. Redirect back to project directory.
 
-4. Install the kernel to be recognised by Jupyter Lab
+4. Navigate to the kernel's folder `nemo_kernel` and install the kernel
 
-    ```shell
-    python -m ipykernel install --user --name "[env_name]" --display-name "[kernel_name] ([env])"
+    ```bash
+    cd nemo-jupyterlab/nemo_kernel
+    pip install .
     ```
-
-5. Access the location where the `kernel.json` is newly created and replace `ipython_launcher` with `nemo_kernel` in the file. The file location can be seen on the terminal after running the previous command.
-6. **At the location of `nemo_kernel.py`**, start Jupyter Lab and test run.
 
 ## Language Server
 
 For now this feature enable basic syntax highlighting. More features may come.
 
 For installation/configuration instruction, please see `README.md` in `jl_config` and `language_server_changes`.
+
+## Troubleshooting
+
+In case the kernel is not detectable or nmo-python is not found:
+
+1. Check whether you have installed nmo-python before installing the kernel.
+
+    ```cmd
+    conda list
+    ```
+
+2. Check which python executable you are using, this relates to incorrect virtual environment.
+
+    ```bash
+    which python
+    ```
 
 &nbsp;
 
