@@ -18,7 +18,7 @@ Jupyter Lab LSP documentation: [here](https://jupyterlab-lsp.readthedocs.io/en/l
     conda install jupyterlab-lsp
     ```
 
-2. Identify the location of your `jupyter-lsp-jupyter-server.json` file or something similar
+2. Search for `jupyter-lsp-jupyter-server.json` file in the list of directories after using this command.
 
     ```cmd
     jupyter --path
