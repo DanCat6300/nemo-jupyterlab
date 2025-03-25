@@ -136,12 +136,12 @@ export function getEditors(virtualDocument: VirtualDocument): any {
 export async function applySemanticTokens(editors: object[], connectionData: IDocumentConnectionData) {
   // Retrieve semantic tokens and distribute them to the appropriate cells
   const tokens = await fetchSemanticTokens(connectionData);
-  if (!tokens) return false;
+  if (!tokens) return;
   const tokensByCells = mapTokensToEditorViews(tokens, editors);
 
   // Apply semantic tokens to each editor
   for (let i = 0; i < editors.length; i++) {
-    if (!tokensByCells[i].length) return false;
+    if (!tokensByCells[i].length) continue;
 
     const view = (editors[i] as any).editor;
     let effects: StateEffect<unknown>[] = tokensByCells[i].map((token: any) => setSemanticTokens.of({
@@ -156,5 +156,5 @@ export async function applySemanticTokens(editors: object[], connectionData: IDo
 
     view.dispatch({ effects });
   }
-  return true;
+  return;
 }
