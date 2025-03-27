@@ -31,6 +31,8 @@ class NemoKernel(MetaKernel):
         self.export_predicates = []
         self.plot_predicates = []
         self.current_cell_id = ''
+        self.assert_outputs = {}
+        self.actual_outputs = {}
         super(NemoKernel, self).__init__(**kwargs)
 
 
@@ -58,10 +60,11 @@ class NemoKernel(MetaKernel):
         self.output_predicates = re.findall(OUTPUT_REGEX, code)
         self.export_predicates = re.findall(EXPORT_REGEX, code)
         self.plot_predicates = re.findall(PLOT_REGEX, code)
+        if '@assert' in code: self.assert_outputs = preprocess_assert(self, code)
 
         # Filter @output, @export and @plot statements from rules before recording to global_state if any
         rules_to_save = code
-        if self.output_predicates or self.export_predicates or self.plot_predicates:
+        if self.output_predicates or self.export_predicates or self.plot_predicates or self.assert_outputs:
             rules_to_save = filter_statements(code)
 
         # Record rules into global_state without @output, @export and @plot
@@ -83,6 +86,8 @@ class NemoKernel(MetaKernel):
         Returns:
             Obj: The results returned by Nemo Engine or error.
         """
+        if '@assert' in rules: rules = filter_assert_statements(rules)
+
         try:
             # Create a nemo engine and reason on rules
             modified_rules = re.sub(r'@plot', '@output', rules)
@@ -102,6 +107,8 @@ class NemoKernel(MetaKernel):
             if self.output_predicates: 
                 # Get results and convert it to dataframes
                 results = get_results(self.output_predicates, engine)
+                self.actual_outputs.update(results)
+
                 dfs = convert_to_df(results)
 
                 # Inject html to visualise dataframes on frontend
@@ -113,9 +120,13 @@ class NemoKernel(MetaKernel):
             if self.plot_predicates:
                 output += f'<img src="{self.current_cell_id}.png"/>'
 
+            if self.assert_outputs:            
+                execute_assert(self)
+
             self.output_predicates = []
             self.export_predicates = []
             self.plot_predicates = []
+            self.assert_outputs = {}
 
             # If there is no output, return without displaying any results
             if not output: return 
@@ -125,7 +136,7 @@ class NemoKernel(MetaKernel):
         except Exception as error:
             # Remove error cell from global_state 
             self.global_state.pop(self.current_cell_id)
-            return f"Error: {str(error)}"
+            return self.Error(f"Error: {str(error)}")
 
 
     def repr(self, data):
@@ -134,7 +145,7 @@ class NemoKernel(MetaKernel):
 
 def filter_statements(rules):
     """
-    Filter @output, @export and @plot statements from the rules
+    Filter @output, @export, @plot and @assert statements from the rules
     Args:
         rules (str): Rules received from server.
     Returns:
@@ -143,7 +154,24 @@ def filter_statements(rules):
     filtered_rules = []
 
     for rule in rules.split('.'):
-        if ('@output' not in rule) and ('@export' not in rule) and ('@plot' not in rule):
+        if ('@output' not in rule) and ('@export' not in rule) and ('@plot' not in rule) and ('@assert' not in rule):
+                filtered_rules.append(rule)
+
+    return('.'.join(filtered_rules))
+
+
+def filter_assert_statements(rules):
+    """
+    Filter @assert statements from the rules
+    Args:
+        rules (str): Rules received from server.
+    Returns:
+        Str: Rules without @assert statements.
+    """
+    filtered_rules = []
+
+    for rule in rules.split('.'):
+        if ('@assert' not in rule):
                 filtered_rules.append(rule)
 
     return('.'.join(filtered_rules))
@@ -249,3 +277,44 @@ def handle_cell_removal(global_state, code):
     current_cells = ast.literal_eval(code.split(',', 1)[1]) # Extract list of active cells from the request
     filtered_global_state = {key: value for key, value in global_state.items() if key in current_cells}
     return filtered_global_state
+
+
+def preprocess_assert(self, code):
+    """
+    Register expected output for later assertion execution.
+    Args:
+        self (object): This instance of kernel.
+        code (String): The code containing @assert statement.
+    Returns:
+        dict: The collection of all expected outputs by predicates.
+    """
+    expected_outputs = {}
+    assert_statements = re.findall(r'@assert\s*(.*?)\s*\.', code)
+
+    for statement in assert_statements:
+        statement = statement.split(' ', 1)
+
+        try:
+            statement_value = eval(statement[1].strip())
+        except SyntaxError as e:
+            self.Error(f"Error: Cannot parse expected output for {statement[0]}")
+            continue
+
+        expected_outputs[statement[0].strip()] = statement_value
+    
+    return expected_outputs
+
+
+def execute_assert(self):
+    """
+    Compare assert (python) on expected and actual outputs.
+    Args:
+        self (object): This instance of kernel.
+    """
+    for key in self.assert_outputs:
+        try:
+            if key not in self.actual_outputs: raise ValueError(f"Error: {key} is not defined")
+            assert self.assert_outputs[key] == self.actual_outputs[key], f"{key} assertion failed"
+            print(f"{key} assertion passed")
+        except (AssertionError, ValueError) as e:
+            self.Error(e)
