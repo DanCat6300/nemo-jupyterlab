@@ -134,10 +134,26 @@ class NemoKernel(MetaKernel):
             return HTML(output)
 
         except Exception as error:
-            # Remove error cell from global_state 
+            # Remove error cell from global_state and clear cache
             self.global_state.pop(self.current_cell_id)
-            return self.Error(f"Error: {str(error)}")
+            self.output_predicates = []
+            self.export_predicates = []
+            self.plot_predicates = []
+            self.assert_outputs = {}
 
+            # Return error
+            self.Error(f"Error: {str(error)}")
+            self.kernel_resp = {
+                "status": "error",
+                "execution_count": self.execution_count,
+                "ename": type(error).__name__,
+                "evalue": str(error),
+                "traceback": [rules],
+            }
+            return 
+
+    def do_debug_request(self, msg):
+        pass # Pass to keep the kernel console clean
 
     def repr(self, data):
         return repr(data)
@@ -296,8 +312,8 @@ def preprocess_assert(self, code):
 
         try:
             statement_value = eval(statement[1].strip())
-        except SyntaxError as e:
-            self.Error(f"Error: Cannot parse expected output for {statement[0]}")
+        except Exception as e:
+            self.Error(f"Cannot parse expected output for {statement[0]}")
             continue
 
         expected_outputs[statement[0].strip()] = statement_value
@@ -312,9 +328,6 @@ def execute_assert(self):
         self (object): This instance of kernel.
     """
     for key in self.assert_outputs:
-        try:
-            if key not in self.actual_outputs: raise ValueError(f"Error: {key} is not defined")
-            assert self.assert_outputs[key] == self.actual_outputs[key], f"{key} assertion failed"
-            print(f"{key} assertion passed")
-        except (AssertionError, ValueError) as e:
-            self.Error(e)
+        if key not in self.actual_outputs: raise ValueError(f"{key} is not defined")
+        assert self.assert_outputs[key] == self.actual_outputs[key], f"{key} assertion failed"
+        print(f"{key} assertion passed")
