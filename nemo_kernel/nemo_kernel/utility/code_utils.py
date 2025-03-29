@@ -3,7 +3,6 @@ def strip_comments(code: str):
     filtered_code = []
 
     for line in lines:
-        print(line)
         if not line.strip().startswith('%') and '%' in line:
             line = line.split('%', 1)
             filtered_code.append(line[0].strip())

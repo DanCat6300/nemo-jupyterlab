@@ -82,11 +82,11 @@ class NemoKernel(MetaKernel):
         Returns:
             Obj: The results returned by Nemo Engine or error.
         """
-        if '@assert' in rules: rules = cd.filter_statements(rules, to_save=False)
-
         try:
             output = ""
             modified_rules = re.sub(r'@plot', '@output', rules)
+            if '@assert' in modified_rules:
+                modified_rules = cd.filter_statements(modified_rules, to_save=False)
 
             # Create a nemo engine and reason on rules
             engine = NemoEngine(load_string(modified_rules))
@@ -94,7 +94,7 @@ class NemoKernel(MetaKernel):
 
             # Handle @export statement if any
             if self.export_predicates:
-                export_results(engine,rules)
+                export_results(engine, rules)
 
             # Handle @plot statement if any
             if self.plot_predicates:
@@ -118,7 +118,8 @@ class NemoKernel(MetaKernel):
                 output += f'<img src="{self.current_cell_id}.png"/>'
 
             # Perform assertion
-            if self.assert_outputs:            
+            if '@assert' in rules:
+                self.assert_outputs = self.preprocess_assert(rules, engine)
                 self.execute_assert()
 
             self.flush_predicates()
@@ -159,7 +160,6 @@ class NemoKernel(MetaKernel):
         self.output_predicates = re.findall(OUTPUT_REGEX, code)
         self.export_predicates = re.findall(EXPORT_REGEX, code)
         self.plot_predicates = re.findall(PLOT_REGEX, code)
-        if '@assert' in code: self.assert_outputs = self.preprocess_assert(code)
 
     def flush_predicates(self):
         """
@@ -170,7 +170,7 @@ class NemoKernel(MetaKernel):
         self.plot_predicates = []
         self.assert_outputs = {}
     
-    def preprocess_assert(self, code):
+    def preprocess_assert(self, code, engine):
         """
         Register expected output for later assertion execution.
         Args:
@@ -184,14 +184,23 @@ class NemoKernel(MetaKernel):
 
         for statement in assert_statements:
             statement = statement.split(' ', 1)
-
             try:
+                # Parse the value into a list
                 statement_value = eval(statement[1].strip())
-            except Exception as e:
-                self.Error(f"Error: Cannot parse expected output for {statement[0]}")
-                continue
+                if isinstance(statement_value, list):
+                    expected_outputs[statement[0].strip()] = statement_value
+                else: raise Exception
 
-            expected_outputs[statement[0].strip()] = statement_value
+            except Exception:
+                try:
+                    # If not a list, try to get value from imported predicates
+                    imported = rlt.get_results([statement[1]], engine)[statement[1]]
+                    if not imported: raise Exception
+                    expected_outputs[statement[0].strip()] = imported
+
+                except Exception as e:
+                    self.Error(f"Error: Cannot parse expected value for {statement[0]}")
+                    continue
         
         return expected_outputs
 
