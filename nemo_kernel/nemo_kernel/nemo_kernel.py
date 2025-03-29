@@ -260,19 +260,6 @@ class NemoKernel(MetaKernel):
             assert self.assert_outputs[key] == self.actual_outputs[key], f"{key} assertion failed"
             print(f"{key} assertion passed")
 
-# def filter_statements(rules):
-#     """
-#     Filter @output, @export, @bar, @scatter, @graph, @shape and @line statements from the rules
-#     Args:
-#         rules (str): Rules received from server.
-#     Returns:
-#         Str: Rules without @output, @export, @bar, @scatter, @graph, @shape and @line statements.
-#     """
-#     filtered_rules = []
-
-#     for rule in rules.split('.'):
-#         if ('@output' not in rule) and ('@export' not in rule) and ('@line' not in rule) and ('@bar' not in rule) and ('@scatter' not in rule) and ('@graph' not in rule) and ('@shape' not in rule):
-#                 filtered_rules.append(rule)
 
 def export_results(engine,rules):
     """
