@@ -6,12 +6,17 @@ import re
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+import networkx as nx
 
 __version__ = "0.1"
 BRACKET_REGEX = r'^<[^>]*>$'
 OUTPUT_REGEX = r"(?<![\s%])\s*@output\s+(\S+)\s*\."
 EXPORT_REGEX = r"@export\s+(\w+)\s*:- "
-PLOT_REGEX = r"(?<![\s%])\s*@plot\s+(\S+)\s*\."
+Line_REGEX = r"(?<![\s%])\s*@line\s+(\S+)\s*\."
+Bar_REGEX = r"(?<![\s%])\s*@bar\s+(\S+)\s*\."
+Scatter_REGEX = r"(?<![\s%])\s*@scatter\s+(\S+)\s*\."
+Shape_REGEX = r"(?<![\s%])\s*@shape\s+(\S+)\s*\."
+Graph_REGEX = r"(?<![\s%])\s*@graph\s+(\S+)\s*\."
 
 
 class NemoKernel(MetaKernel):
@@ -29,8 +34,13 @@ class NemoKernel(MetaKernel):
         self.global_state = {}
         self.output_predicates = []
         self.export_predicates = []
-        self.plot_predicates = []
+        self.line_predicates = []
+        self.bar_predicates = []
+        self.scatter_predicates = []
+        self.shape_predicates = []
+        self.graph_predicates = []
         self.current_cell_id = ''
+        self.total_fig = 0
         super(NemoKernel, self).__init__(**kwargs)
 
 
@@ -57,14 +67,18 @@ class NemoKernel(MetaKernel):
         # Extract output predicates from the rules 
         self.output_predicates = re.findall(OUTPUT_REGEX, code)
         self.export_predicates = re.findall(EXPORT_REGEX, code)
-        self.plot_predicates = re.findall(PLOT_REGEX, code)
+        self.line_predicates = re.findall(Line_REGEX, code)
+        self.bar_predicates = re.findall(Bar_REGEX, code)
+        self.scatter_predicates = re.findall(Scatter_REGEX, code)
+        self.shape_predicates = re.findall(Shape_REGEX, code)
+        self.graph_predicates = re.findall(Graph_REGEX, code)
 
-        # Filter @output, @export and @plot statements from rules before recording to global_state if any
+        # Filter @output, @export, @bar, @scatter, @graph, @shape and @line statements from rules before recording to global_state if any
         rules_to_save = code
-        if self.output_predicates or self.export_predicates or self.plot_predicates:
+        if self.output_predicates or self.export_predicates or self.line_predicates or self.bar_predicates or self.scatter_predicates or self.graph_predicates or self.shape_predicates:
             rules_to_save = filter_statements(code)
 
-        # Record rules into global_state without @output, @export and @plot
+        # Record rules into global_state without @output, @export, @bar, @scatter, @graph, @shape and @line
         self.global_state[cell_id] = rules_to_save
 
         # Compile all active rules from global_state with the current cell into a string
@@ -85,7 +99,11 @@ class NemoKernel(MetaKernel):
         """
         try:
             # Create a nemo engine and reason on rules
-            modified_rules = re.sub(r'@plot', '@output', rules)
+            modified_rules = re.sub(r'@line', '@output', rules)
+            modified_rules = re.sub(r'@bar', '@output', modified_rules)
+            modified_rules = re.sub(r'@scatter', '@output', modified_rules)
+            modified_rules = re.sub(r'@shape', '@output', modified_rules)
+            modified_rules = re.sub(r'@graph', '@output', modified_rules)
             engine = NemoEngine(load_string(modified_rules))
             engine.reason()
 
@@ -93,9 +111,25 @@ class NemoKernel(MetaKernel):
             if self.export_predicates:
                 export_results(engine,rules)
 
-            # If plot statement exists, Plot the results:
-            if self.plot_predicates:
-                plot_results(self, engine) 
+            # If line statement exists, plot the results:
+            if self.line_predicates:
+                plot_results(self, engine, 'line') 
+            
+            # If bar statement exists, plot the results:
+            if self.bar_predicates:
+                plot_results(self, engine, 'bar') 
+            
+            # If scatter statement exists, plot the results:
+            if self.scatter_predicates:
+                plot_results(self, engine, 'scatter') 
+            
+            # If shape statement exists, plot the results:
+            if self.shape_predicates:
+                plot_results(self, engine, 'shape') 
+
+            # If graph statement exists, plot the results:
+            if self.graph_predicates:
+                plot_results(self, engine, 'graph') 
 
             output = ""
             # If no output statements, return without displaying results
@@ -110,12 +144,18 @@ class NemoKernel(MetaKernel):
                     for key, df in dfs.items()
                 )
 
-            if self.plot_predicates:
-                output += f'<img src="{self.current_cell_id}.png"/>'
+            #plot images in the total number of figures
+            for item in range(self.total_fig):
+                output += f'<img src="{self.current_cell_id}{item}.png"/>'                
 
             self.output_predicates = []
             self.export_predicates = []
-            self.plot_predicates = []
+            self.line_predicates = []
+            self.bar_predicates = []
+            self.scatter_predicates = []
+            self.shape_predicates = []
+            self.graph_predicates = []
+            self.total_fig = 0
 
             # If there is no output, return without displaying any results
             if not output: return 
@@ -134,16 +174,16 @@ class NemoKernel(MetaKernel):
 
 def filter_statements(rules):
     """
-    Filter @output, @export and @plot statements from the rules
+    Filter @output, @export, @bar, @scatter, @graph, @shape and @line statements from the rules
     Args:
         rules (str): Rules received from server.
     Returns:
-        Str: Rules without @output, @export and @plot statements.
+        Str: Rules without @output, @export, @bar, @scatter, @graph, @shape and @line statements.
     """
     filtered_rules = []
 
     for rule in rules.split('.'):
-        if ('@output' not in rule) and ('@export' not in rule) and ('@plot' not in rule):
+        if ('@output' not in rule) and ('@export' not in rule) and ('@line' not in rule) and ('@bar' not in rule) and ('@scatter' not in rule) and ('@graph' not in rule) and ('@shape' not in rule):
                 filtered_rules.append(rule)
 
     return('.'.join(filtered_rules))
@@ -219,21 +259,64 @@ def export_results(engine,rules):
         engine.write_result(export, output_manager)
 
 
-def plot_results(self, engine):
+def plot_results(self, engine, plot_type):
     """
-    Plot the element in the cell.
+    plot the element in the cell.
     Args:
         engine (NemoEngine): The instantiated nemo object. 
         self (Self@NemoKernel): global variable of class NemoKernel.
+        plot_type (String): the type of plot  
     """
-    # Get plot results and convert it to dataframes
-    results = get_results(self.plot_predicates, engine)
-    dfs = convert_to_df(results)
+    if plot_type == 'line':
+        # Get line results and convert it to dataframes
+        results = get_results(self.line_predicates, engine)
+        dfs = convert_to_df(results)
+        for key, df in dfs.items():
+            plt.plot(df['Node 1'], df['Node 2'], marker='o', label=str(key))
 
-    for key, df in dfs.items():
-        plt.plot(df['Node 1'], df['Node 2'], marker='o', label=str(key))
-        plt.legend()  # Show legend
-        plt.savefig(self.current_cell_id)
+    if plot_type == 'bar':
+        results = get_results(self.bar_predicates, engine)
+        dfs = convert_to_df(results)
+        for key, df in dfs.items():
+            plt.bar(df['Node 1'], df['Node 2'], label=str(key))
+
+    if plot_type == 'scatter':
+        results = get_results(self.scatter_predicates, engine)
+        dfs = convert_to_df(results)
+        for key, df in dfs.items():
+            plt.scatter(df['Node 1'], df['Node 2'], label=str(key))
+    
+    if plot_type == 'shape':
+        results = get_results(self.shape_predicates, engine)
+        dfs = convert_to_df(results)
+        for key, df in dfs.items():
+            plt.plot(df['Node 1'], df['Node 2'], marker='o', label=str(key))
+            plt.fill_between(df['Node 1'], df['Node 2'])
+
+    if plot_type == 'graph':
+        results = get_results(self.graph_predicates, engine)
+        dfs = convert_to_df(results)
+        G = nx.MultiDiGraph()
+        for key, df in dfs.items():
+            G.add_nodes_from(df['Node 1'])        
+            # Add edges with key as an attribute (ensuring multiple edges)
+            for i in range(len(df['Node 1'])):
+                G.add_edge(df['Node 1'][i], df['Node 2'][i], label=key)  # Store key as label
+            plt.figure(figsize=(8,6))
+            pos = nx.shell_layout(G)  # Use shell layout for better spacing
+            nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=12)
+            edge_labels = {}
+            for u, v, k, d in G.edges(keys=True, data=True):
+                if (u, v) in edge_labels:
+                    edge_labels[(u, v)] += "\n" + d["label"]  # Append new label with newline
+                else:
+                    edge_labels[(u, v)] = d["label"]  # First label
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='gray', font_size=10, label_pos=0.5)
+
+
+    plt.legend()  # Show legend
+    plt.savefig(f'{self.current_cell_id}{self.total_fig}')
+    self.total_fig = self.total_fig + 1
     plt.close()
 
 
