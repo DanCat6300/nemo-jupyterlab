@@ -7,6 +7,8 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 import networkx as nx
+from .utility import result_utils as rlt
+from .utility import code_utils as cd
 
 __version__ = "0.1"
 BRACKET_REGEX = r'^<[^>]*>$'
@@ -41,6 +43,8 @@ class NemoKernel(MetaKernel):
         self.graph_predicates = []
         self.current_cell_id = ''
         self.total_fig = 0
+        self.assert_outputs = {}
+        self.actual_outputs = {}
         super(NemoKernel, self).__init__(**kwargs)
 
 
@@ -58,6 +62,7 @@ class NemoKernel(MetaKernel):
             Func: Call the default do_execute.
         """
         # On cell removal event, update global state and return
+        code = cd.strip_comments(code)
         if 'cell_removal_event' in code:
             self.global_state = handle_cell_removal(self.global_state, code)
             return
@@ -65,18 +70,10 @@ class NemoKernel(MetaKernel):
         self.current_cell_id = cell_id
 
         # Extract output predicates from the rules 
-        self.output_predicates = re.findall(OUTPUT_REGEX, code)
-        self.export_predicates = re.findall(EXPORT_REGEX, code)
-        self.line_predicates = re.findall(Line_REGEX, code)
-        self.bar_predicates = re.findall(Bar_REGEX, code)
-        self.scatter_predicates = re.findall(Scatter_REGEX, code)
-        self.shape_predicates = re.findall(Shape_REGEX, code)
-        self.graph_predicates = re.findall(Graph_REGEX, code)
+        self.extract_predicates(code)
 
         # Filter @output, @export, @bar, @scatter, @graph, @shape and @line statements from rules before recording to global_state if any
-        rules_to_save = code
-        if self.output_predicates or self.export_predicates or self.line_predicates or self.bar_predicates or self.scatter_predicates or self.graph_predicates or self.shape_predicates:
-            rules_to_save = filter_statements(code)
+        rules_to_save = cd.filter_statements(code, to_save=True)
 
         # Record rules into global_state without @output, @export, @bar, @scatter, @graph, @shape and @line
         self.global_state[cell_id] = rules_to_save
@@ -104,12 +101,17 @@ class NemoKernel(MetaKernel):
             modified_rules = re.sub(r'@scatter', '@output', modified_rules)
             modified_rules = re.sub(r'@shape', '@output', modified_rules)
             modified_rules = re.sub(r'@graph', '@output', modified_rules)
+            output = ""
+            if '@assert' in modified_rules:
+                modified_rules = cd.filter_statements(modified_rules, to_save=False)
+
+            # Create a nemo engine and reason on rules
             engine = NemoEngine(load_string(modified_rules))
             engine.reason()
 
-            #Export @export predicates when it is needed
+            # Handle @export statement if any
             if self.export_predicates:
-                export_results(engine,rules)
+                export_results(engine, rules)
 
             # If line statement exists, plot the results:
             if self.line_predicates:
@@ -131,12 +133,13 @@ class NemoKernel(MetaKernel):
             if self.graph_predicates:
                 plot_results(self, engine, 'graph') 
 
-            output = ""
-            # If no output statements, return without displaying results
+            # Handle @output statement
             if self.output_predicates: 
                 # Get results and convert it to dataframes
-                results = get_results(self.output_predicates, engine)
-                dfs = convert_to_df(results)
+                results = rlt.get_results(self.output_predicates, engine)
+                self.actual_outputs.update(results)
+
+                dfs = rlt.convert_to_df(results)
 
                 # Inject html to visualise dataframes on frontend
                 output = "".join(
@@ -148,14 +151,12 @@ class NemoKernel(MetaKernel):
             for item in range(self.total_fig):
                 output += f'<img src="{self.current_cell_id}{item}.png"/>'                
 
-            self.output_predicates = []
-            self.export_predicates = []
-            self.line_predicates = []
-            self.bar_predicates = []
-            self.scatter_predicates = []
-            self.shape_predicates = []
-            self.graph_predicates = []
-            self.total_fig = 0
+            # Perform assertion
+            if '@assert' in rules:
+                self.assert_outputs = self.preprocess_assert(rules, engine)
+                self.execute_assert()
+
+            self.flush_predicates()
 
             # If there is no output, return without displaying any results
             if not output: return 
@@ -163,85 +164,115 @@ class NemoKernel(MetaKernel):
             return HTML(output)
 
         except Exception as error:
-            # Remove error cell from global_state 
+            # Remove error cell from global_state and clear cache
             self.global_state.pop(self.current_cell_id)
-            return f"Error: {str(error)}"
+            self.flush_predicates()
 
+            # Return error
+            self.Error(f"Error: {str(error)}")
+            self.kernel_resp = {
+                "status": "error",
+                "execution_count": self.execution_count,
+                "ename": type(error).__name__,
+                "evalue": str(error),
+                "traceback": [rules],
+            }
+            return 
+
+    def do_debug_request(self, msg):
+        pass # Pass to keep the kernel console clean
 
     def repr(self, data):
         return repr(data)
+    
+    def extract_predicates(self, code):
+        """
+        Find statements for tasks and extract predicates
+        Args:
+            code (str): The rules from the current cell
+        """
+        self.output_predicates = re.findall(OUTPUT_REGEX, code)
+        self.export_predicates = re.findall(EXPORT_REGEX, code)
+        self.line_predicates = re.findall(Line_REGEX, code)
+        self.bar_predicates = re.findall(Bar_REGEX, code)
+        self.scatter_predicates = re.findall(Scatter_REGEX, code)
+        self.shape_predicates = re.findall(Shape_REGEX, code)
+        self.graph_predicates = re.findall(Graph_REGEX, code)
+        
+        
 
+    def flush_predicates(self):
+        """
+        Clean up predicates for the next execution
+        """
+        self.output_predicates = []
+        self.export_predicates = []
+        self.assert_outputs = {}
+        self.line_predicates = []
+        self.bar_predicates = []
+        self.scatter_predicates = []
+        self.shape_predicates = []
+        self.graph_predicates = []
+        self.total_fig = 0
+    
+    def preprocess_assert(self, code, engine):
+        """
+        Register expected output for later assertion execution.
+        Args:
+            self (object): This instance of kernel.
+            code (String): The code containing @assert statement.
+        Returns:
+            dict: The collection of all expected outputs by predicates.
+        """
+        expected_outputs = {}
+        assert_statements = re.findall(r'@assert\s*(.*?)\s*\.', code)
 
-def filter_statements(rules):
-    """
-    Filter @output, @export, @bar, @scatter, @graph, @shape and @line statements from the rules
-    Args:
-        rules (str): Rules received from server.
-    Returns:
-        Str: Rules without @output, @export, @bar, @scatter, @graph, @shape and @line statements.
-    """
-    filtered_rules = []
+        for statement in assert_statements:
+            statement = statement.split(' ', 1)
+            try:
+                # Parse the value into a list
+                statement_value = eval(statement[1].strip())
+                if isinstance(statement_value, list):
+                    expected_outputs[statement[0].strip()] = statement_value
+                else: raise Exception
 
-    for rule in rules.split('.'):
-        if ('@output' not in rule) and ('@export' not in rule) and ('@line' not in rule) and ('@bar' not in rule) and ('@scatter' not in rule) and ('@graph' not in rule) and ('@shape' not in rule):
-                filtered_rules.append(rule)
+            except Exception:
+                try:
+                    # If not a list, try to get value from imported predicates
+                    imported = rlt.get_results([statement[1]], engine)[statement[1]]
+                    if not imported: raise Exception
+                    expected_outputs[statement[0].strip()] = imported
 
-    return('.'.join(filtered_rules))
+                except Exception as e:
+                    self.Error(f"Error: Cannot parse expected value for {statement[0]}")
+                    continue
+        
+        return expected_outputs
 
+    def execute_assert(self):
+        """
+        Compare assert (python) on expected and actual outputs.
+        Args:
+            self (object): This instance of kernel.
+        """
+        for key in self.assert_outputs:
+            if key not in self.actual_outputs: raise ValueError(f"{key} is not defined")
+            assert self.assert_outputs[key] == self.actual_outputs[key], f"{key} assertion failed"
+            print(f"{key} assertion passed")
 
-def get_results(output_statements, nemo_engine):
-    """
-    Extract results from nemo engine for each output predicates.
-    Args:
-        output_Statements (List): Output statements extracted from the rules.
-        nemo_engine (NemoEngine): The instantiated nemo object. 
-    Returns:
-        dict: Dictionary containing results by out predicates.
-    """
-    raw_results = {}
+# def filter_statements(rules):
+#     """
+#     Filter @output, @export, @bar, @scatter, @graph, @shape and @line statements from the rules
+#     Args:
+#         rules (str): Rules received from server.
+#     Returns:
+#         Str: Rules without @output, @export, @bar, @scatter, @graph, @shape and @line statements.
+#     """
+#     filtered_rules = []
 
-    for output_key in output_statements:
-        raw_results[output_key] = list(nemo_engine.result(output_key))
-    formatted_results = format_results(raw_results)
-
-    return formatted_results
-
-
-def format_results(output_object):
-    """
-    Transform all elements in the results object into a more workable format
-    Args:
-        results (dict): the retrieved result dictionary after reasoning
-    Returns:
-        dict: the results dictionary with all elements formatted.
-    """
-    formatted_results = {}
-
-    for key, sublists in output_object.items():
-        formatted_results[key] = [
-            [element[1:-1] if isinstance(element, str) 
-             and bool(re.match(BRACKET_REGEX, element)) 
-             else element 
-             for element in sublist] 
-            for sublist in sublists
-        ]
-
-    return formatted_results
-
-
-def convert_to_df(results):
-    """
-    Convert result dictionary to pandas dataframe
-    """
-    dfs = {}
-
-    for key, value in results.items():
-        df = pd.DataFrame(value)
-        df.columns = [f"Node {i+1}" for i in range(df.shape[1])]
-        dfs[key] = df
-
-    return dfs
-
+#     for rule in rules.split('.'):
+#         if ('@output' not in rule) and ('@export' not in rule) and ('@line' not in rule) and ('@bar' not in rule) and ('@scatter' not in rule) and ('@graph' not in rule) and ('@shape' not in rule):
+#                 filtered_rules.append(rule)
 
 def export_results(engine,rules):
     """
@@ -269,33 +300,33 @@ def plot_results(self, engine, plot_type):
     """
     if plot_type == 'line':
         # Get line results and convert it to dataframes
-        results = get_results(self.line_predicates, engine)
-        dfs = convert_to_df(results)
+        results = rlt.get_results(self.line_predicates, engine)
+        dfs = rlt.convert_to_df(results)
         for key, df in dfs.items():
             plt.plot(df['Node 1'], df['Node 2'], marker='o', label=str(key))
 
     if plot_type == 'bar':
-        results = get_results(self.bar_predicates, engine)
-        dfs = convert_to_df(results)
+        results = rlt.get_results(self.bar_predicates, engine)
+        dfs = rlt.convert_to_df(results)
         for key, df in dfs.items():
             plt.bar(df['Node 1'], df['Node 2'], label=str(key))
 
     if plot_type == 'scatter':
-        results = get_results(self.scatter_predicates, engine)
-        dfs = convert_to_df(results)
+        results = rlt.get_results(self.scatter_predicates, engine)
+        dfs = rlt.convert_to_df(results)
         for key, df in dfs.items():
             plt.scatter(df['Node 1'], df['Node 2'], label=str(key))
     
     if plot_type == 'shape':
-        results = get_results(self.shape_predicates, engine)
-        dfs = convert_to_df(results)
+        results = rlt.get_results(self.shape_predicates, engine)
+        dfs = rlt.convert_to_df(results)
         for key, df in dfs.items():
             plt.plot(df['Node 1'], df['Node 2'], marker='o', label=str(key))
             plt.fill_between(df['Node 1'], df['Node 2'])
 
     if plot_type == 'graph':
-        results = get_results(self.graph_predicates, engine)
-        dfs = convert_to_df(results)
+        results = rlt.get_results(self.graph_predicates, engine)
+        dfs = rlt.convert_to_df(results)
         G = nx.MultiDiGraph()
         for key, df in dfs.items():
             G.add_nodes_from(df['Node 1'])        

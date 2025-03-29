@@ -47,6 +47,7 @@ Below are the steps specifically for this project:
 1. Direct to the extension's folder to install dependencies and build the extension
 
     ```shell
+    cd jlx_nemo
     jlpm install
     jlpm run build
     ```
